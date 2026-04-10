@@ -167,6 +167,14 @@ func (c *Client) parseFile(relPath, content string, info os.FileInfo) *cachedPag
 		prefix := strings.ToLower(c.dailyFolder) + "/"
 		isJournal = strings.HasPrefix(lowerName, prefix)
 	}
+	// Also detect pages in the "journals/" namespace whose basename is a date.
+	// This handles Obsidian vaults that use journals/YYYY-MM-DD naming.
+	if !isJournal && strings.HasPrefix(lowerName, "journals/") {
+		base := lowerName[len("journals/"):]
+		if isDateString(base) {
+			isJournal = true
+		}
+	}
 
 	entity := types.PageEntity{
 		Name:         name,

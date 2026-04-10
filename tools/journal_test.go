@@ -43,6 +43,7 @@ func TestJournalPageNames_UsesCorrectOrdinalSuffix(t *testing.T) {
 		"February 15th, 2026",
 		"2026-02-15",
 		"February 15, 2026",
+		"journals/2026-02-15",
 	}
 
 	if !reflect.DeepEqual(got, want) {

@@ -204,6 +204,94 @@ func TestJournalPages(t *testing.T) {
 	}
 }
 
+func TestJournalPages_ObsidianJournalsNamespace(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a journals/ directory with date-named pages (Obsidian convention).
+	journalsDir := filepath.Join(tmpDir, "journals")
+	if err := os.MkdirAll(journalsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(journalsDir, "2026-04-08.md"), []byte("# Tuesday\n\nStandup notes"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(journalsDir, "2026-04-09.md"), []byte("# Wednesday\n\nMore notes"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	// A non-date file in journals/ should NOT be detected as journal.
+	if err := os.WriteFile(filepath.Join(journalsDir, "random-notes.md"), []byte("# Random\n\nNot a journal"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	// A regular page outside journals/.
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.md"), []byte("# Index\n\nHome page"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	c := New(tmpDir)
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c.BuildBacklinks()
+
+	ctx := context.Background()
+	pages, _ := c.GetAllPages(ctx)
+
+	journalCount := 0
+	for _, p := range pages {
+		if p.Journal {
+			journalCount++
+			// Verify it's a date-named page, not random-notes.
+			if strings.Contains(p.Name, "random-notes") {
+				t.Errorf("non-date page in journals/ should not be a journal: %s", p.Name)
+			}
+		}
+	}
+	if journalCount != 2 {
+		t.Errorf("expected 2 journal pages from journals/ namespace, got %d", journalCount)
+		for _, p := range pages {
+			t.Logf("  page: %s journal=%v", p.Name, p.Journal)
+		}
+	}
+}
+
+func TestGetPageBlocksTree_NoDuplicateBlocks(t *testing.T) {
+	c := testVault(t)
+	ctx := context.Background()
+
+	blocks, err := c.GetPageBlocksTree(ctx, "projects/graphthulhu")
+	if err != nil {
+		t.Fatalf("GetPageBlocksTree: %v", err)
+	}
+	if len(blocks) == 0 {
+		t.Fatal("expected blocks")
+	}
+
+	// Count all blocks (including children) and check for duplicate UUIDs.
+	uuidSeen := make(map[string]int)
+	var countAll func([]types.BlockEntity) int
+	countAll = func(bs []types.BlockEntity) int {
+		n := len(bs)
+		for _, b := range bs {
+			uuidSeen[b.UUID]++
+			n += countAll(b.Children)
+		}
+		return n
+	}
+	total := countAll(blocks)
+
+	for uuid, count := range uuidSeen {
+		if count > 1 {
+			t.Errorf("block UUID %s appears %d times (should be unique)", uuid, count)
+		}
+	}
+
+	// Sanity check: a page with 1 root + 2 children should have 3 blocks, not 5.
+	// The test page has: # graphthulhu (root) with ## Architecture, ## Features children.
+	if total > 10 {
+		t.Errorf("suspiciously high block count %d — possible duplication", total)
+	}
+}
+
 func TestPing(t *testing.T) {
 	c := testVault(t)
 	if err := c.Ping(context.Background()); err != nil {

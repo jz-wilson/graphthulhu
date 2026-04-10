@@ -90,12 +90,16 @@ func (j *Journal) JournalRange(ctx context.Context, req *mcp.CallToolRequest, in
 func journalPageNames(d time.Time) []string {
 	day := d.Day()
 	suffix := ordinalSuffix(day)
+	iso := d.Format("2006-01-02")
 
 	return []string{
+		// Logseq formats
 		fmt.Sprintf("%s %d%s, %d", d.Format("Jan"), day, suffix, d.Year()),
 		fmt.Sprintf("%s %d%s, %d", d.Format("January"), day, suffix, d.Year()),
-		d.Format("2006-01-02"),
+		iso,
 		d.Format("January 2, 2006"),
+		// Obsidian journals/ namespace
+		"journals/" + iso,
 	}
 }
 

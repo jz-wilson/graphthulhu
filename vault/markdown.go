@@ -181,8 +181,16 @@ func getOrCreateUUID(filepath string, lineNumber int, content string) (string, s
 	if blockUUID != "" {
 		return blockUUID, cleanContent
 	}
-	
+
 	// No embedded UUID found, use deterministic UUID as fallback
 	// This provides backward compatibility
 	return deterministicUUID(filepath, lineNumber), cleanContent
+}
+
+// datePattern matches YYYY-MM-DD date strings used in Obsidian journal page names.
+var datePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// isDateString returns true if the string is a YYYY-MM-DD date.
+func isDateString(s string) bool {
+	return datePattern.MatchString(s)
 }
