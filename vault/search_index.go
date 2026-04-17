@@ -114,6 +114,7 @@ func (si *SearchIndex) Search(query string, limit int) []SearchResult {
 	}
 
 	// Filter candidates that appear in ALL other term sets.
+	// Collect all matches before sorting so relevance ranking sees the full result set.
 	var results []SearchResult
 	for _, ref := range candidates {
 		inAll := true
@@ -132,12 +133,12 @@ func (si *SearchIndex) Search(query string, limit int) []SearchResult {
 			UUID:     ref.uuid,
 			Content:  ref.content,
 		})
-
-		if len(results) >= limit {
-			break
-		}
 	}
 
+	SortByRelevance(results, query)
+	if len(results) > limit {
+		results = results[:limit]
+	}
 	return results
 }
 
@@ -257,7 +258,6 @@ func isWordChar(r rune) bool {
 }
 
 // SortByRelevance sorts search results by term frequency.
-// Not currently used but available for future ranking improvements.
 func SortByRelevance(results []SearchResult, query string) {
 	terms := tokenize(query)
 	sort.Slice(results, func(i, j int) bool {
