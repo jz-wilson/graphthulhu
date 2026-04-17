@@ -203,6 +203,12 @@ type DecisionDeferInput struct {
 // AnalysisHealthInput has no required params — audits all analysis/strategy pages.
 type AnalysisHealthInput struct{}
 
+// ValidateFrontmatterInput configures which fields and types to check.
+type ValidateFrontmatterInput struct {
+	RequiredFields []string `json:"requiredFields,omitempty" jsonschema:"Fields every page must have. Default: name,description,type,updated"`
+	AllowedTypes   []string `json:"allowedTypes,omitempty" jsonschema:"Allowed values for the type field. Default: feedback,reference,user,project,people,infrastructure,decision,journal"`
+}
+
 // --- Journal tool inputs ---
 
 type JournalRangeInput struct {

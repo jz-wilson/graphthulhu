@@ -29,6 +29,7 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 	search := tools.NewSearch(b)
 	analyze := tools.NewAnalyze(b)
 	journal := tools.NewJournal(b)
+	validate := tools.NewValidate(b)
 
 	var write *tools.Write
 	var decision *tools.Decision
@@ -116,6 +117,11 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 		Name:        "list_orphans",
 		Description: "List orphan pages (no incoming or outgoing links). Returns page names with block counts and property status. Use for graph hygiene — find disconnected pages that need linking or cleanup.",
 	}, analyze.ListOrphans)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "validate_frontmatter",
+		Description: "Report pages that violate vault frontmatter schema: missing required fields (name, description, type, updated), invalid type values, or malformed updated dates. Accepts optional overrides for required fields and allowed types.",
+	}, validate.ValidateFrontmatter)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "topic_clusters",

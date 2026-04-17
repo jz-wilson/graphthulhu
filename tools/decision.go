@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -423,6 +424,15 @@ func (d *Decision) AnalysisHealth(ctx context.Context, req *mcp.CallToolRequest,
 // Uses PropertySearcher if available (Obsidian), falls back to DataScript (Logseq).
 func (d *Decision) findAnalysisPages(ctx context.Context) ([]string, error) {
 	targetTypes := []string{"analysis", "strategy", "assessment"}
+	if envTypes := os.Getenv("GRAPHTHULHU_ANALYSIS_TYPES"); envTypes != "" {
+		parts := strings.Split(envTypes, ",")
+		targetTypes = targetTypes[:0]
+		for _, p := range parts {
+			if t := strings.TrimSpace(p); t != "" {
+				targetTypes = append(targetTypes, t)
+			}
+		}
+	}
 
 	// Use native property search if available (Obsidian).
 	if searcher, ok := d.client.(backend.PropertySearcher); ok {
