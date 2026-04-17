@@ -28,6 +28,7 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 	nav := tools.NewNavigate(b)
 	search := tools.NewSearch(b)
 	analyze := tools.NewAnalyze(b)
+	integrity := tools.NewIntegrity(b)
 	journal := tools.NewJournal(b)
 	validate := tools.NewValidate(b)
 
@@ -117,6 +118,16 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 		Name:        "list_orphans",
 		Description: "List orphan pages (no incoming or outgoing links). Returns page names with block counts and property status. Use for graph hygiene — find disconnected pages that need linking or cleanup.",
 	}, analyze.ListOrphans)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "list_broken_links",
+		Description: "Scan all wikilinks and report those pointing to non-existent pages. Returns fromPage, link, and closest-match suggestion per broken link.",
+	}, integrity.ListBrokenLinks)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "page_quality",
+		Description: "Audit a single page for structural issues: duplicate H2/H3 headings. Returns healthy=true when none found.",
+	}, analyze.PageQuality)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "validate_frontmatter",

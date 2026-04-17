@@ -222,3 +222,11 @@ type JournalSearchInput struct {
 	From  string `json:"from,omitempty" jsonschema:"Start date filter (YYYY-MM-DD)"`
 	To    string `json:"to,omitempty" jsonschema:"End date filter (YYYY-MM-DD)"`
 }
+
+// ListBrokenLinksInput has no parameters — scans the entire vault.
+type ListBrokenLinksInput struct{}
+
+// PageQualityInput specifies which page to audit.
+type PageQualityInput struct {
+	Name string `json:"name" jsonschema:"Page name to audit for structural quality issues (duplicate headings)"`
+}

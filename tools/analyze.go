@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -172,6 +173,51 @@ func (a *Analyze) TopicClusters(ctx context.Context, req *mcp.CallToolRequest, i
 	res, err := jsonTextResult(map[string]any{
 		"clusterCount": len(clusters),
 		"clusters":     clusters,
+	})
+	return res, nil, err
+}
+
+// PageQuality audits a single page for structural issues such as duplicate H2/H3 headings.
+func (a *Analyze) PageQuality(ctx context.Context, req *mcp.CallToolRequest, input types.PageQualityInput) (*mcp.CallToolResult, any, error) {
+	blocks, err := a.client.GetPageBlocksTree(ctx, input.Name)
+	if err != nil {
+		return errorResult(fmt.Sprintf("page not found: %v", err)), nil, nil
+	}
+
+	headingCounts := make(map[string]int)
+	var collectHeadings func([]types.BlockEntity)
+	collectHeadings = func(bs []types.BlockEntity) {
+		for _, b := range bs {
+			content := strings.TrimSpace(b.Content)
+			if strings.HasPrefix(content, "## ") || strings.HasPrefix(content, "### ") {
+				h := strings.ToLower(strings.TrimLeft(content, "# "))
+				headingCounts[h]++
+			}
+			if len(b.Children) > 0 {
+				collectHeadings(b.Children)
+			}
+		}
+	}
+	collectHeadings(blocks)
+
+	type dupHeading struct {
+		Heading string `json:"heading"`
+		Count   int    `json:"count"`
+	}
+	var dups []dupHeading
+	for h, count := range headingCounts {
+		if count > 1 {
+			dups = append(dups, dupHeading{Heading: h, Count: count})
+		}
+	}
+	sort.Slice(dups, func(i, j int) bool {
+		return dups[i].Heading < dups[j].Heading
+	})
+
+	res, err := jsonTextResult(map[string]any{
+		"page":              input.Name,
+		"healthy":           len(dups) == 0,
+		"duplicateHeadings": dups,
 	})
 	return res, nil, err
 }
