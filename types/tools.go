@@ -241,3 +241,9 @@ type GetPagesInput struct {
 type ListStalePagesInput struct {
 	Limit int `json:"limit,omitempty" jsonschema:"Max pages to return, ranked by staleness. Default: 20"`
 }
+
+// ChangedSinceInput specifies the cutoff timestamp for the changed_since feed.
+type ChangedSinceInput struct {
+	Since string `json:"since" jsonschema:"Cutoff timestamp (YYYY-MM-DD or RFC3339). Pages modified after this are returned."`
+	Limit int    `json:"limit,omitempty" jsonschema:"Max pages to return, newest first. Default: 50"`
+}

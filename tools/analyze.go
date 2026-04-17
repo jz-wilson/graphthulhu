@@ -280,3 +280,58 @@ func (a *Analyze) ListStalePages(ctx context.Context, req *mcp.CallToolRequest, 
 	})
 	return res, nil, err
 }
+
+// ChangedSince returns pages modified after the given timestamp, ordered newest first.
+func (a *Analyze) ChangedSince(ctx context.Context, req *mcp.CallToolRequest, input types.ChangedSinceInput) (*mcp.CallToolResult, any, error) {
+	pages, err := a.client.GetAllPages(ctx)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to list pages: %v", err)), nil, nil
+	}
+
+	var since time.Time
+	for _, layout := range []string{"2006-01-02", time.RFC3339} {
+		if t, parseErr := time.Parse(layout, input.Since); parseErr == nil {
+			since = t
+			break
+		}
+	}
+	if since.IsZero() {
+		return errorResult(fmt.Sprintf("invalid since format: %q — use YYYY-MM-DD or RFC3339", input.Since)), nil, nil
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+
+	sinceMs := since.UnixMilli()
+
+	type changedPage struct {
+		Name      string `json:"name"`
+		UpdatedAt string `json:"updatedAt"`
+	}
+
+	var changed []changedPage
+	for _, p := range pages {
+		if p.UpdatedAt > sinceMs {
+			changed = append(changed, changedPage{
+				Name:      p.Name,
+				UpdatedAt: time.UnixMilli(p.UpdatedAt).UTC().Format(time.RFC3339),
+			})
+		}
+	}
+
+	sort.Slice(changed, func(i, j int) bool {
+		return changed[i].UpdatedAt > changed[j].UpdatedAt
+	})
+	if len(changed) > limit {
+		changed = changed[:limit]
+	}
+
+	res, err := jsonTextResult(map[string]any{
+		"since": input.Since,
+		"total": len(changed),
+		"pages": changed,
+	})
+	return res, nil, err
+}

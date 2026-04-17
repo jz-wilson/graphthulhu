@@ -130,6 +130,11 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 	}, analyze.ListStalePages)
 
 	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "changed_since",
+		Description: "Return pages modified after a given timestamp (YYYY-MM-DD or RFC3339), ordered newest first. Uses file mtime. Useful for incremental session catch-up without fetching the full vault.",
+	}, analyze.ChangedSince)
+
+	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "list_broken_links",
 		Description: "Scan all wikilinks and report those pointing to non-existent pages. Returns fromPage, link, and closest-match suggestion per broken link.",
 	}, integrity.ListBrokenLinks)
