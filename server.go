@@ -46,6 +46,11 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 	}, nav.GetPage)
 
 	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "get_pages",
+		Description: "Fetch multiple pages in a single call. Returns a map of page name → {page, blocks, blockCount}. Use compact=true for token-efficient output. Cuts round-trips when loading MEMORY + a focus entity at session start.",
+	}, nav.GetPages)
+
+	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_block",
 		Description: "Get a specific block by UUID with its ancestor chain (path to root page), children, and optionally siblings. Provides full context for where a block sits in the knowledge hierarchy.",
 	}, nav.GetBlock)
@@ -118,6 +123,11 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 		Name:        "list_orphans",
 		Description: "List orphan pages (no incoming or outgoing links). Returns page names with block counts and property status. Use for graph hygiene — find disconnected pages that need linking or cleanup.",
 	}, analyze.ListOrphans)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "list_stale_pages",
+		Description: "Rank pages by age of their updated property. Returns pages sorted by daysStale descending. Pages missing updated are shown last with daysStale=9999.",
+	}, analyze.ListStalePages)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "list_broken_links",

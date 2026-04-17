@@ -230,3 +230,14 @@ type ListBrokenLinksInput struct{}
 type PageQualityInput struct {
 	Name string `json:"name" jsonschema:"Page name to audit for structural quality issues (duplicate headings)"`
 }
+
+// GetPagesInput fetches multiple pages in one call.
+type GetPagesInput struct {
+	Names   []string `json:"names" jsonschema:"Page names to retrieve"`
+	Compact bool     `json:"compact,omitempty" jsonschema:"Return compact block format (strings+UUIDs) instead of enriched tree"`
+}
+
+// ListStalePagesInput configures the stale page report.
+type ListStalePagesInput struct {
+	Limit int `json:"limit,omitempty" jsonschema:"Max pages to return, ranked by staleness. Default: 20"`
+}

@@ -221,3 +221,62 @@ func (a *Analyze) PageQuality(ctx context.Context, req *mcp.CallToolRequest, inp
 	})
 	return res, nil, err
 }
+
+// ListStalePages ranks pages by staleness (age of updated property).
+func (a *Analyze) ListStalePages(ctx context.Context, req *mcp.CallToolRequest, input types.ListStalePagesInput) (*mcp.CallToolResult, any, error) {
+	pages, err := a.client.GetAllPages(ctx)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to list pages: %v", err)), nil, nil
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+
+	type stalePage struct {
+		Name      string `json:"name"`
+		UpdatedAt string `json:"updatedAt"`
+		DaysStale int    `json:"daysStale"`
+	}
+
+	now := time.Now()
+	var stale []stalePage
+
+	for _, p := range pages {
+		var updatedStr string
+		if u, ok := p.Properties["updated"]; ok && u != nil {
+			updatedStr = fmt.Sprintf("%v", u)
+		}
+
+		days := 9999
+		displayStr := "unknown"
+
+		for _, layout := range []string{"2006-01-02", time.RFC3339, "2006-01-02 15:04"} {
+			if t, err2 := time.Parse(layout, updatedStr); err2 == nil {
+				days = int(now.Sub(t).Hours() / 24)
+				displayStr = t.Format("2006-01-02")
+				break
+			}
+		}
+
+		stale = append(stale, stalePage{
+			Name:      p.Name,
+			UpdatedAt: displayStr,
+			DaysStale: days,
+		})
+	}
+
+	sort.Slice(stale, func(i, j int) bool {
+		return stale[i].DaysStale > stale[j].DaysStale
+	})
+	if len(stale) > limit {
+		stale = stale[:limit]
+	}
+
+	res, err := jsonTextResult(map[string]any{
+		"total": len(pages),
+		"pages": stale,
+	})
+	return res, nil, err
+}

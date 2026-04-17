@@ -86,6 +86,44 @@ func (n *Navigate) GetPage(ctx context.Context, req *mcp.CallToolRequest, input 
 	return res, nil, err
 }
 
+// GetPages retrieves multiple pages in a single call.
+func (n *Navigate) GetPages(ctx context.Context, req *mcp.CallToolRequest, input types.GetPagesInput) (*mcp.CallToolResult, any, error) {
+	results := make(map[string]any, len(input.Names))
+
+	for _, name := range input.Names {
+		page, err := n.client.GetPage(ctx, name)
+		if err != nil || page == nil {
+			results[name] = map[string]any{"error": fmt.Sprintf("page not found: %s", name)}
+			continue
+		}
+
+		blocks, err := n.client.GetPageBlocksTree(ctx, name)
+		if err != nil {
+			results[name] = map[string]any{"error": fmt.Sprintf("failed to get blocks: %v", err)}
+			continue
+		}
+
+		if input.Compact {
+			compactBlocks := flattenBlocksCompact(blocks)
+			results[name] = map[string]any{
+				"page":       page,
+				"blocks":     compactBlocks,
+				"blockCount": len(compactBlocks),
+			}
+		} else {
+			enrichedBlocks := enrichBlockTree(blocks, -1, 0)
+			results[name] = map[string]any{
+				"page":       page,
+				"blocks":     enrichedBlocks,
+				"blockCount": countBlocks(enrichedBlocks),
+			}
+		}
+	}
+
+	res, err := jsonTextResult(results)
+	return res, nil, err
+}
+
 // GetBlock retrieves a block with ancestors, children, and optionally siblings.
 func (n *Navigate) GetBlock(ctx context.Context, req *mcp.CallToolRequest, input types.GetBlockInput) (*mcp.CallToolResult, any, error) {
 	opts := map[string]any{"includeChildren": true}
