@@ -2,6 +2,7 @@ package vault
 
 import (
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -9,6 +10,7 @@ import (
 // parseFrontmatter extracts YAML frontmatter from markdown content.
 // Returns the parsed properties and the remaining content after the frontmatter.
 // If no frontmatter is found, returns nil properties and the original content.
+// The updated property, if present, is normalized to a bare YYYY-MM-DD string.
 func parseFrontmatter(content string) (map[string]any, string) {
 	if !strings.HasPrefix(content, "---") {
 		return nil, content
@@ -31,7 +33,35 @@ func parseFrontmatter(content string) (map[string]any, string) {
 		return nil, content
 	}
 
+	if props != nil {
+		if u, ok := props["updated"]; ok && u != nil {
+			props["updated"] = normalizeUpdatedValue(u)
+		}
+	}
+
 	return props, after
+}
+
+// normalizeUpdatedValue normalizes an updated property value to a bare YYYY-MM-DD string.
+// Accepts YYYY-MM-DD, RFC3339, and space-separated date+time variants.
+// Returns the original string unchanged if it cannot be parsed.
+func normalizeUpdatedValue(v any) string {
+	var raw string
+	switch val := v.(type) {
+	case string:
+		raw = strings.TrimSpace(strings.Trim(val, "\""))
+	case time.Time:
+		return val.Format("2006-01-02")
+	default:
+		return ""
+	}
+
+	for _, layout := range []string{"2006-01-02", time.RFC3339, "2006-01-02 15:04", "2006-01-02T15:04"} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t.Format("2006-01-02")
+		}
+	}
+	return raw
 }
 
 // renderFrontmatter serializes properties to a YAML frontmatter block.

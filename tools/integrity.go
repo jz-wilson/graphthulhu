@@ -47,13 +47,18 @@ func (i *Integrity) ListBrokenLinks(ctx context.Context, req *mcp.CallToolReques
 			fromPage = p.Name
 		}
 		for target := range targets {
-			if _, exists := g.Pages[strings.ToLower(target)]; !exists {
-				broken = append(broken, brokenLink{
-					FromPage:   fromPage,
-					Link:       target,
-					Suggestion: suggestPage(target, g.Pages),
-				})
+			if _, exists := g.Pages[strings.ToLower(target)]; exists {
+				continue
 			}
+			// Not in graph — check via GetPage to catch alias-resolved pages.
+			if resolved, err := i.client.GetPage(ctx, target); err == nil && resolved != nil {
+				continue
+			}
+			broken = append(broken, brokenLink{
+				FromPage:   fromPage,
+				Link:       target,
+				Suggestion: suggestPage(target, g.Pages),
+			})
 		}
 	}
 	sort.Slice(broken, func(i, j int) bool {
