@@ -52,19 +52,19 @@ func (s *Search) searchIndexed(ctx context.Context, searcher backend.FullTextSea
 
 	var results []map[string]any
 	for _, hit := range hits {
-		if input.Compact {
-			results = append(results, map[string]any{
-				"page":    hit.PageName,
-				"uuid":    hit.UUID,
-				"content": hit.Content,
-			})
-		} else {
+		if input.Verbose {
 			parsed := parser.Parse(hit.Content)
 			results = append(results, map[string]any{
 				"page":    hit.PageName,
 				"uuid":    hit.UUID,
 				"content": hit.Content,
 				"parsed":  parsed,
+			})
+		} else {
+			results = append(results, map[string]any{
+				"page":    hit.PageName,
+				"uuid":    hit.UUID,
+				"content": hit.Content,
 			})
 		}
 	}
@@ -105,15 +105,14 @@ func (s *Search) searchBruteForce(ctx context.Context, input types.SearchInput, 
 			if len(results) >= limit {
 				break
 			}
-			if input.Compact {
-				compact := map[string]any{
+			if input.Verbose {
+				results = append(results, m)
+			} else {
+				results = append(results, map[string]any{
 					"page":    m["page"],
 					"uuid":    m["uuid"],
 					"content": m["content"],
-				}
-				results = append(results, compact)
-			} else {
-				results = append(results, m)
+				})
 			}
 		}
 	}

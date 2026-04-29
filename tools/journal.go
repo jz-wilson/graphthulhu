@@ -69,7 +69,7 @@ func (j *Journal) JournalRange(ctx context.Context, req *mcp.CallToolRequest, in
 		if input.IncludeBlocks {
 			blocks, err := j.client.GetPageBlocksTree(ctx, foundName)
 			if err == nil {
-				enriched := enrichBlockTree(blocks, -1, 0)
+				enriched := enrichBlockTree(blocks, -1, 0, make(map[string]bool))
 				entry["blocks"] = enriched
 				entry["blockCount"] = countBlocks(enriched)
 			}

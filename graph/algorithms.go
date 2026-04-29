@@ -7,14 +7,14 @@ import (
 
 // OverviewStats contains global graph statistics.
 type OverviewStats struct {
-	TotalPages      int              `json:"totalPages"`
-	TotalBlocks     int              `json:"totalBlocks"`
-	TotalLinks      int              `json:"totalLinks"`
-	JournalPages    int              `json:"journalPages"`
-	OrphanPages     int              `json:"orphanPages"`
-	MostConnected   []PageStat       `json:"mostConnected"`
-	MostLinkedTo    []PageStat       `json:"mostLinkedTo"`
-	Namespaces      map[string]int   `json:"namespaces"`
+	TotalPages    int            `json:"totalPages"`
+	TotalBlocks   int            `json:"totalBlocks"`
+	TotalLinks    int            `json:"totalLinks"`
+	JournalPages  int            `json:"journalPages"`
+	OrphanPages   int            `json:"orphanPages"`
+	MostConnected []PageStat     `json:"mostConnected"`
+	MostLinkedTo  []PageStat     `json:"mostLinkedTo"`
+	Namespaces    map[string]int `json:"namespaces"`
 }
 
 // PageStat is a page with its connectivity score.

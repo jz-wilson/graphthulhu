@@ -12,9 +12,9 @@ import (
 // SearchIndex is a simple inverted index for full-text search.
 // Maps lowercase terms to the blocks containing them.
 type SearchIndex struct {
-	mu      sync.RWMutex
+	mu sync.RWMutex
 	// term → list of block references
-	index   map[string][]blockRef
+	index map[string][]blockRef
 	// page lowercase → set of terms (for efficient removal on reindex)
 	pageTerms map[string]map[string]bool
 }

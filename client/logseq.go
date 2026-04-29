@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	defaultAPIURL      = "http://127.0.0.1:12315"
-	defaultTimeout     = 10 * time.Second
-	maxRetries         = 3
-	initialBackoff     = 100 * time.Millisecond
+	defaultAPIURL  = "http://127.0.0.1:12315"
+	defaultTimeout = 10 * time.Second
+	maxRetries     = 3
+	initialBackoff = 100 * time.Millisecond
 )
 
 // Client communicates with the Logseq HTTP API.

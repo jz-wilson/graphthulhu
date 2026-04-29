@@ -3,10 +3,12 @@ package types
 // --- Navigate tool inputs ---
 
 type GetPageInput struct {
-	Name      string `json:"name" jsonschema:"Page name to retrieve"`
-	Depth     int    `json:"depth,omitempty" jsonschema:"Max block tree depth (-1 for unlimited). Default: -1"`
-	MaxBlocks int    `json:"maxBlocks,omitempty" jsonschema:"Max total blocks to return. Truncates with a flag when exceeded. Default: unlimited"`
-	Compact   bool   `json:"compact,omitempty" jsonschema:"Return blocks as plain strings instead of enriched objects. Saves ~60%% tokens. Default: false"`
+	Name               string `json:"name" jsonschema:"Page name to retrieve"`
+	Depth              int    `json:"depth,omitempty" jsonschema:"Max block tree depth (-1 for unlimited). Default: -1"`
+	MaxBlocks          int    `json:"maxBlocks,omitempty" jsonschema:"Max total blocks to return. Truncates with a flag when exceeded. Default: unlimited"`
+	Compact            bool   `json:"compact,omitempty" jsonschema:"Return blocks as plain strings instead of enriched objects. Saves ~60%% tokens. Default: false"`
+	IncludeBacklinks   bool   `json:"include_backlinks,omitempty" jsonschema:"Include backlinks (pages that link to this page). Default: false. Use get_links for backlink-only queries."`
+	ExcludeBoilerplate bool   `json:"exclude_boilerplate,omitempty" jsonschema:"Strip [[MEMORY]] footer and --- separator blocks before returning. Default: false"`
 }
 
 type GetBlockInput struct {
@@ -44,7 +46,7 @@ type SearchInput struct {
 	Query        string `json:"query" jsonschema:"Search text to find across all blocks"`
 	ContextLines int    `json:"contextLines,omitempty" jsonschema:"Number of parent/sibling blocks for context. Default: 2"`
 	Limit        int    `json:"limit,omitempty" jsonschema:"Max results. Default: 20"`
-	Compact      bool   `json:"compact,omitempty" jsonschema:"Return minimal results (uuid, content, page) without parsed metadata. Saves ~50%% tokens. Default: false"`
+	Verbose      bool   `json:"verbose,omitempty" jsonschema:"Return full results including parsed content, parent chain, and siblings. Default: false (compact)"`
 }
 
 type QueryPropertiesInput struct {
@@ -54,7 +56,7 @@ type QueryPropertiesInput struct {
 }
 
 type QueryDatalogInput struct {
-	Query  string `json:"query" jsonschema:"Datalog/DataScript query string"`
+	Query  string   `json:"query" jsonschema:"Datalog/DataScript query string"`
 	Inputs []string `json:"inputs,omitempty" jsonschema:"Query input bindings (string representations)"`
 }
 
@@ -140,9 +142,9 @@ type RenamePageInput struct {
 }
 
 type BulkUpdatePropertiesInput struct {
-	Pages    []string       `json:"pages" jsonschema:"List of page names to update"`
-	Property string         `json:"property" jsonschema:"Property key to set"`
-	Value    string         `json:"value" jsonschema:"Property value to set"`
+	Pages    []string `json:"pages" jsonschema:"List of page names to update"`
+	Property string   `json:"property" jsonschema:"Property key to set"`
+	Value    string   `json:"value" jsonschema:"Property value to set"`
 }
 
 type LinkPagesInput struct {
@@ -233,8 +235,9 @@ type PageQualityInput struct {
 
 // GetPagesInput fetches multiple pages in one call.
 type GetPagesInput struct {
-	Names   []string `json:"names" jsonschema:"Page names to retrieve"`
-	Compact bool     `json:"compact,omitempty" jsonschema:"Return compact block format (strings+UUIDs) instead of enriched tree"`
+	Names              []string `json:"names" jsonschema:"Page names to retrieve"`
+	Compact            bool     `json:"compact,omitempty" jsonschema:"Return compact block format (strings+UUIDs) instead of enriched tree"`
+	ExcludeBoilerplate bool     `json:"exclude_boilerplate,omitempty" jsonschema:"Strip [[MEMORY]] footer and --- separator blocks before returning. Default: false"`
 }
 
 // ListStalePagesInput configures the stale page report.
@@ -246,4 +249,15 @@ type ListStalePagesInput struct {
 type ChangedSinceInput struct {
 	Since string `json:"since" jsonschema:"Cutoff timestamp (YYYY-MM-DD or RFC3339). Pages modified after this are returned."`
 	Limit int    `json:"limit,omitempty" jsonschema:"Max pages to return, newest first. Default: 50"`
+}
+
+// GraphIndexInput controls the graph_index frontmatter-only index.
+type GraphIndexInput struct {
+	Type         string `json:"type,omitempty" jsonschema:"Filter by page type property value (e.g. feedback, project, people)"`
+	UpdatedAfter string `json:"updated_after,omitempty" jsonschema:"Only include pages with updated property on or after this date (YYYY-MM-DD)"`
+}
+
+// BatchGetPagesSummaryInput fetches frontmatter-only for a list of pages.
+type BatchGetPagesSummaryInput struct {
+	Pages []string `json:"pages" jsonschema:"Page names to retrieve frontmatter for"`
 }

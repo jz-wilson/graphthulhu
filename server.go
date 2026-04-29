@@ -42,13 +42,18 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 	// --- Navigate tools (all backends) ---
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_page",
-		Description: "Get a Logseq page with its full recursive block tree, properties, tags, and parsed links. Every block includes extracted [[links]], ((references)), #tags, and key:: value properties. Use maxBlocks to limit output size for large pages.",
+		Description: "Get a Logseq page with its full recursive block tree, properties, tags, and parsed links. Every block includes extracted [[links]], ((references)), #tags, and key:: value properties. Use maxBlocks to limit output size for large pages. Backlinks not included by default; use include_backlinks:true or the get_links tool. Use exclude_boilerplate:true to strip [[MEMORY]] footer and --- separator blocks.",
 	}, nav.GetPage)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_pages",
-		Description: "Fetch multiple pages in a single call. Returns a map of page name → {page, blocks, blockCount}. Use compact=true for token-efficient output. Cuts round-trips when loading MEMORY + a focus entity at session start.",
+		Description: "Fetch multiple pages in a single call. Returns a map of page name → {page, blocks, blockCount}. Use compact=true for token-efficient output. Cuts round-trips when loading MEMORY + a focus entity at session start. Use exclude_boilerplate:true to strip [[MEMORY]] footer and --- separator blocks.",
 	}, nav.GetPages)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "batch_get_pages_summary",
+		Description: "Returns frontmatter-only summary for a list of pages. Use to load cluster metadata without fetching full block trees. Returns found:false for missing pages.",
+	}, nav.BatchGetPagesSummary)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_block",
@@ -59,6 +64,11 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 		Name:        "list_pages",
 		Description: "List pages with filtering by namespace, property, or tag. Returns page summaries with block count and link count. Sort by name, modified, or created.",
 	}, nav.ListPages)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "graph_index",
+		Description: "Returns frontmatter-only index of all vault pages (name, description, type, updated). Use to skim what exists before committing to full get_page calls. Optional: type filter and updated_after filter.",
+	}, nav.GraphIndex)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_links",
@@ -74,14 +84,14 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 	if hasDataScript {
 		mcp.AddTool(srv, &mcp.Tool{
 			Name:        "get_references",
-			Description: "Get all blocks that reference a specific block via ((uuid)) block references. Returns the referencing blocks with their page context.",
+			Description: "Get all blocks that reference a specific block via ((uuid)) block references. Returns the referencing blocks with their page context. (Logseq-specific: requires Logseq backend, not local file backend)",
 		}, nav.GetReferences)
 	}
 
 	// --- Search tools ---
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "search",
-		Description: "Full-text search across all blocks in the knowledge graph. Returns matching blocks with surrounding context (parent chain and sibling blocks) so you understand where each match sits.",
+		Description: "Full-text search across all blocks in the knowledge graph. Compact by default (page, uuid, content only). Use verbose:true for parsed content, parent chain, and siblings. Limit defaults to 20.",
 	}, search.Search)
 
 	// query_properties and find_by_tag use native search on Obsidian, DataScript on Logseq.
@@ -99,7 +109,7 @@ func newServer(b backend.Backend, readOnly bool) *mcp.Server {
 	if hasDataScript {
 		mcp.AddTool(srv, &mcp.Tool{
 			Name:        "query_datalog",
-			Description: "Execute raw DataScript/Datalog queries against the Logseq database. This is the most powerful query mechanism — can find anything. Example: [:find (pull ?b [*]) :where [?b :block/marker \"TODO\"]] finds all TODO blocks.",
+			Description: "Execute raw DataScript/Datalog queries against the Logseq database. This is the most powerful query mechanism — can find anything. Example: [:find (pull ?b [*]) :where [?b :block/marker \"TODO\"]] finds all TODO blocks. Returns raw Datalog query results. Use for complex cross-page queries; prefer search for text lookup.",
 		}, search.QueryDatalog)
 	}
 

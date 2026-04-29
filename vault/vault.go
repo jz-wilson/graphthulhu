@@ -877,7 +877,6 @@ func (c *Client) RemoveBlock(_ context.Context, uuid string) error {
 
 	oldContentWithUUID := embedUUID(oldContent, uuid)
 	var newContent string
-
 	if strings.Contains(fileStr, oldContentWithUUID+"\n") {
 		newContent = strings.Replace(fileStr, oldContentWithUUID+"\n", "", 1)
 	} else if strings.Contains(fileStr, oldContentWithUUID) {

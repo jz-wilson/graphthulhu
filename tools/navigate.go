@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -42,7 +43,7 @@ func (n *Navigate) GetPage(ctx context.Context, req *mcp.CallToolRequest, input 
 		depth = -1 // unlimited by default
 	}
 
-	enrichedBlocks := enrichBlockTree(blocks, depth, 0)
+	enrichedBlocks := enrichBlockTree(blocks, depth, 0, make(map[string]bool))
 
 	totalBlocks := countBlocks(enrichedBlocks)
 	truncated := false
@@ -52,14 +53,24 @@ func (n *Navigate) GetPage(ctx context.Context, req *mcp.CallToolRequest, input 
 		truncated = true
 	}
 
+	if input.ExcludeBoilerplate {
+		enrichedBlocks = filterBoilerplate(enrichedBlocks, boilerplatePrefixes())
+		// Also filter raw blocks used by compact mode below.
+		blocks = filterBoilerplateRaw(blocks, boilerplatePrefixes())
+	}
+
 	outgoing := collectOutgoingLinks(enrichedBlocks)
-	backlinks := n.getBacklinks(ctx, input.Name)
 
 	result := map[string]any{
 		"page":          page,
 		"outgoingLinks": outgoing,
-		"backlinks":     backlinks,
-		"linkCount":     len(outgoing) + len(backlinks),
+		"linkCount":     len(outgoing),
+	}
+
+	if input.IncludeBacklinks {
+		backlinks := n.getBacklinks(ctx, input.Name)
+		result["backlinks"] = backlinks
+		result["linkCount"] = len(outgoing) + len(backlinks)
 	}
 
 	if input.Compact {
@@ -104,14 +115,21 @@ func (n *Navigate) GetPages(ctx context.Context, req *mcp.CallToolRequest, input
 		}
 
 		if input.Compact {
-			compactBlocks := flattenBlocksCompact(blocks)
+			rawBlocks := blocks
+			if input.ExcludeBoilerplate {
+				rawBlocks = filterBoilerplateRaw(rawBlocks, boilerplatePrefixes())
+			}
+			compactBlocks := flattenBlocksCompact(rawBlocks)
 			results[name] = map[string]any{
 				"page":       page,
 				"blocks":     compactBlocks,
 				"blockCount": len(compactBlocks),
 			}
 		} else {
-			enrichedBlocks := enrichBlockTree(blocks, -1, 0)
+			enrichedBlocks := enrichBlockTree(blocks, -1, 0, make(map[string]bool))
+			if input.ExcludeBoilerplate {
+				enrichedBlocks = filterBoilerplate(enrichedBlocks, boilerplatePrefixes())
+			}
 			results[name] = map[string]any{
 				"page":       page,
 				"blocks":     enrichedBlocks,
@@ -121,6 +139,49 @@ func (n *Navigate) GetPages(ctx context.Context, req *mcp.CallToolRequest, input
 	}
 
 	res, err := jsonTextResult(results)
+	return res, nil, err
+}
+
+// BatchGetPagesSummary returns frontmatter-only for a list of named pages.
+// No block tree is loaded — cuts round-trips when loading cluster metadata.
+func (n *Navigate) BatchGetPagesSummary(ctx context.Context, req *mcp.CallToolRequest, input types.BatchGetPagesSummaryInput) (*mcp.CallToolResult, any, error) {
+	type PageSummary struct {
+		Name        string `json:"name"`
+		Description string `json:"description,omitempty"`
+		Type        string `json:"type,omitempty"`
+		Updated     string `json:"updated,omitempty"`
+		Found       bool   `json:"found"`
+	}
+
+	summaries := make([]PageSummary, 0, len(input.Pages))
+
+	for _, name := range input.Pages {
+		page, err := n.client.GetPage(ctx, name)
+		if err != nil || page == nil {
+			summaries = append(summaries, PageSummary{Name: name, Found: false})
+			continue
+		}
+
+		s := PageSummary{Name: name, Found: true}
+		if page.Properties != nil {
+			if v, ok := page.Properties["description"]; ok {
+				s.Description = fmt.Sprintf("%v", v)
+			}
+			if v, ok := page.Properties["type"]; ok {
+				s.Type = fmt.Sprintf("%v", v)
+			}
+			if v, ok := page.Properties["updated"]; ok {
+				s.Updated = fmt.Sprintf("%v", v)
+			}
+		}
+		// Use OriginalName if available (preserves casing)
+		if page.OriginalName != "" {
+			s.Name = page.OriginalName
+		}
+		summaries = append(summaries, s)
+	}
+
+	res, err := jsonTextResult(summaries)
 	return res, nil, err
 }
 
@@ -213,6 +274,77 @@ func (n *Navigate) ListPages(ctx context.Context, req *mcp.CallToolRequest, inpu
 	}
 
 	res, err := jsonTextResult(summaries)
+	return res, nil, err
+}
+
+// GraphIndex returns frontmatter-only (name, description, type, updated) for all pages.
+// Supports optional filtering by type and updated_after date.
+func (n *Navigate) GraphIndex(ctx context.Context, req *mcp.CallToolRequest, input types.GraphIndexInput) (*mcp.CallToolResult, any, error) {
+	pages, err := n.client.GetAllPages(ctx)
+	if err != nil {
+		return errorResult(fmt.Sprintf("failed to list pages: %v", err)), nil, nil
+	}
+
+	type pageEntry struct {
+		Name        string `json:"name"`
+		Description string `json:"description,omitempty"`
+		Type        string `json:"type,omitempty"`
+		Updated     string `json:"updated,omitempty"`
+	}
+
+	var result []pageEntry
+	for _, p := range pages {
+		if p.Name == "" {
+			continue
+		}
+
+		// Extract frontmatter fields from Properties.
+		name := p.OriginalName
+		if name == "" {
+			name = p.Name
+		}
+
+		var description, pageType, updated string
+		if p.Properties != nil {
+			if v, ok := p.Properties["description"]; ok {
+				description = fmt.Sprintf("%v", v)
+			}
+			if v, ok := p.Properties["type"]; ok {
+				pageType = fmt.Sprintf("%v", v)
+			}
+			if v, ok := p.Properties["updated"]; ok {
+				updated = fmt.Sprintf("%v", v)
+			}
+		}
+
+		// Apply type filter.
+		if input.Type != "" && !strings.EqualFold(pageType, input.Type) {
+			continue
+		}
+
+		// Apply updated_after filter.
+		if input.UpdatedAfter != "" && updated != "" {
+			if updated < input.UpdatedAfter {
+				continue
+			}
+		}
+
+		result = append(result, pageEntry{
+			Name:        name,
+			Description: description,
+			Type:        pageType,
+			Updated:     updated,
+		})
+	}
+
+	// Sort by name for stable output.
+	for i := 1; i < len(result); i++ {
+		for j := i; j > 0 && strings.ToLower(result[j].Name) < strings.ToLower(result[j-1].Name); j-- {
+			result[j], result[j-1] = result[j-1], result[j]
+		}
+	}
+
+	res, err := jsonTextResult(result)
 	return res, nil, err
 }
 
@@ -419,20 +551,27 @@ func (n *Navigate) getAncestors(ctx context.Context, uuid string) ([]types.Block
 // Uses BlockEntity directly to avoid re-enriching the tree (which caused exponential blowup).
 func flattenBlocksCompact(blocks []types.BlockEntity) []map[string]string {
 	var result []map[string]string
-	flattenCompactRecursive(blocks, 0, &result)
+	seen := make(map[string]bool)
+	flattenCompactRecursive(blocks, 0, &result, seen)
 	return result
 }
 
-func flattenCompactRecursive(blocks []types.BlockEntity, depth int, result *[]map[string]string) {
+func flattenCompactRecursive(blocks []types.BlockEntity, depth int, result *[]map[string]string, seen map[string]bool) {
 	indent := strings.Repeat("  ", depth)
 	for _, b := range blocks {
+		if b.UUID != "" && seen[b.UUID] {
+			continue
+		}
+		if b.UUID != "" {
+			seen[b.UUID] = true
+		}
 		entry := map[string]string{
 			"uuid":    b.UUID,
 			"content": indent + b.Content,
 		}
 		*result = append(*result, entry)
 		if len(b.Children) > 0 {
-			flattenCompactRecursive(b.Children, depth+1, result)
+			flattenCompactRecursive(b.Children, depth+1, result, seen)
 		}
 	}
 }
@@ -483,13 +622,19 @@ func truncateEnrichedChildren(blocks []types.BlockEntity, remaining *int) []type
 	return result
 }
 
-func enrichBlockTree(blocks []types.BlockEntity, maxDepth, currentDepth int) []types.EnrichedBlock {
+func enrichBlockTree(blocks []types.BlockEntity, maxDepth, currentDepth int, seen map[string]bool) []types.EnrichedBlock {
 	if maxDepth >= 0 && currentDepth > maxDepth {
 		return nil
 	}
 
 	enriched := make([]types.EnrichedBlock, 0, len(blocks))
 	for _, b := range blocks {
+		if b.UUID != "" && seen[b.UUID] {
+			continue
+		}
+		if b.UUID != "" {
+			seen[b.UUID] = true
+		}
 		// Save children before enriching, since enrichBlock copies the whole
 		// BlockEntity (including Children). We rebuild Children from the
 		// enriched results to avoid duplicating them.
@@ -497,7 +642,7 @@ func enrichBlockTree(blocks []types.BlockEntity, maxDepth, currentDepth int) []t
 		b.Children = nil
 		eb := enrichBlock(b)
 		if len(originalChildren) > 0 {
-			childEnriched := enrichBlockTree(originalChildren, maxDepth, currentDepth+1)
+			childEnriched := enrichBlockTree(originalChildren, maxDepth, currentDepth+1, seen)
 			for _, ce := range childEnriched {
 				eb.BlockEntity.Children = append(eb.BlockEntity.Children, ce.BlockEntity)
 			}
@@ -611,4 +756,70 @@ func sortByField(pages []types.PageEntity, key func(types.PageEntity) int64) {
 			pages[j], pages[j-1] = pages[j-1], pages[j]
 		}
 	}
+}
+
+// boilerplatePrefixes returns the default prefixes plus any configured via
+// GRAPHTHULHU_BOILERPLATE_PREFIXES (comma-separated, case-insensitive).
+func boilerplatePrefixes() []string {
+	defaults := []string{"[[memory]]", "---"}
+	env := os.Getenv("GRAPHTHULHU_BOILERPLATE_PREFIXES")
+	if env == "" {
+		return defaults
+	}
+	var extra []string
+	for _, p := range strings.Split(env, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			extra = append(extra, strings.ToLower(p))
+		}
+	}
+	return append(defaults, extra...)
+}
+
+// filterBoilerplate strips blocks whose Content (lowercased) starts with any
+// of the given prefixes. Operates recursively on children.
+func filterBoilerplate(blocks []types.EnrichedBlock, prefixes []string) []types.EnrichedBlock {
+	var result []types.EnrichedBlock
+	for _, b := range blocks {
+		contentLower := strings.ToLower(strings.TrimSpace(b.BlockEntity.Content))
+		matched := false
+		for _, p := range prefixes {
+			if strings.HasPrefix(contentLower, p) {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			continue
+		}
+		if len(b.BlockEntity.Children) > 0 {
+			filtered := filterBoilerplateRaw(b.BlockEntity.Children, prefixes)
+			b.BlockEntity.Children = filtered
+		}
+		result = append(result, b)
+	}
+	return result
+}
+
+// filterBoilerplateRaw is the BlockEntity variant used for compact mode and children.
+func filterBoilerplateRaw(blocks []types.BlockEntity, prefixes []string) []types.BlockEntity {
+	var result []types.BlockEntity
+	for _, b := range blocks {
+		contentLower := strings.ToLower(strings.TrimSpace(b.Content))
+		matched := false
+		for _, p := range prefixes {
+			if strings.HasPrefix(contentLower, p) {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			continue
+		}
+		if len(b.Children) > 0 {
+			b.Children = filterBoilerplateRaw(b.Children, prefixes)
+		}
+		result = append(result, b)
+	}
+	return result
 }
