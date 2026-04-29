@@ -1425,3 +1425,47 @@ func TestIncludeHidden_WatcherIndexesHiddenFiles(t *testing.T) {
 		t.Error("file in hidden directory not indexed via watcher with WithIncludeHidden(true)")
 	}
 }
+
+// TestAppendBlockInPage_MultipleBlocks is a regression guard for the parser
+// bug where multiple root-level UUID-tagged blocks collapsed into one block.
+func TestAppendBlockInPage_MultipleBlocks(t *testing.T) {
+	tmpDir := t.TempDir()
+	c := New(tmpDir)
+	if err := c.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	ctx := context.Background()
+	page := "scratch/multi_block_test"
+	contents := []string{"Alpha", "Beta", "Gamma", "Delta", "Epsilon"}
+
+	var appendedUUIDs []string
+	for _, content := range contents {
+		block, err := c.AppendBlockInPage(ctx, page, content)
+		if err != nil {
+			t.Fatalf("AppendBlockInPage(%q): %v", content, err)
+		}
+		if block == nil {
+			t.Fatalf("AppendBlockInPage(%q): returned nil block", content)
+		}
+		appendedUUIDs = append(appendedUUIDs, block.UUID)
+	}
+
+	blocks, err := c.GetPageBlocksTree(ctx, page)
+	if err != nil {
+		t.Fatalf("GetPageBlocksTree: %v", err)
+	}
+
+	if len(blocks) != len(contents) {
+		t.Fatalf("expected %d root blocks, got %d", len(contents), len(blocks))
+	}
+
+	for i, content := range contents {
+		if blocks[i].UUID != appendedUUIDs[i] {
+			t.Errorf("block[%d].UUID = %q, want %q", i, blocks[i].UUID, appendedUUIDs[i])
+		}
+		if blocks[i].Content != content {
+			t.Errorf("block[%d].Content = %q, want %q", i, blocks[i].Content, content)
+		}
+	}
+}

@@ -232,6 +232,86 @@ func TestParseMarkdownBlocks(t *testing.T) {
 			t.Errorf("content = %q", blocks[0].Content)
 		}
 	})
+
+	t.Run("multiple UUID-tagged root blocks", func(t *testing.T) {
+		body := "<!-- id: 11111111-1111-1111-1111-111111111111 -->\nBlock A content\n<!-- id: 22222222-2222-2222-2222-222222222222 -->\nBlock B content\n<!-- id: 33333333-3333-3333-3333-333333333333 -->\nBlock C content"
+		blocks := parseMarkdownBlocks("test.md", body)
+		if len(blocks) != 3 {
+			t.Fatalf("expected 3 blocks, got %d: %+v", len(blocks), blocks)
+		}
+		if blocks[0].UUID != "11111111-1111-1111-1111-111111111111" {
+			t.Errorf("blocks[0].UUID = %q", blocks[0].UUID)
+		}
+		if blocks[0].Content != "Block A content" {
+			t.Errorf("blocks[0].Content = %q, want 'Block A content'", blocks[0].Content)
+		}
+		if blocks[1].UUID != "22222222-2222-2222-2222-222222222222" {
+			t.Errorf("blocks[1].UUID = %q", blocks[1].UUID)
+		}
+		if blocks[1].Content != "Block B content" {
+			t.Errorf("blocks[1].Content = %q", blocks[1].Content)
+		}
+		if blocks[2].UUID != "33333333-3333-3333-3333-333333333333" {
+			t.Errorf("blocks[2].UUID = %q", blocks[2].UUID)
+		}
+		if blocks[2].Content != "Block C content" {
+			t.Errorf("blocks[2].Content = %q", blocks[2].Content)
+		}
+	})
+
+	t.Run("UUID-tagged roots followed by heading", func(t *testing.T) {
+		body := "<!-- id: 11111111-1111-1111-1111-111111111111 -->\nRoot content\n## Heading"
+		blocks := parseMarkdownBlocks("test.md", body)
+		if len(blocks) != 2 {
+			t.Fatalf("expected 2 blocks, got %d", len(blocks))
+		}
+		if blocks[0].UUID != "11111111-1111-1111-1111-111111111111" {
+			t.Errorf("blocks[0].UUID = %q", blocks[0].UUID)
+		}
+		if blocks[0].Content != "Root content" {
+			t.Errorf("blocks[0].Content = %q, want 'Root content'", blocks[0].Content)
+		}
+		if blocks[1].Content != "## Heading" {
+			t.Errorf("blocks[1].Content = %q, want '## Heading'", blocks[1].Content)
+		}
+	})
+
+	t.Run("heading followed by UUID-tagged root", func(t *testing.T) {
+		// UUID comment inside a heading section becomes a child of that heading
+		// (preserves Logseq child-block format). The fix only splits at root level (level 0).
+		body := "## Heading\n<!-- id: 11111111-1111-1111-1111-111111111111 -->\nRoot content"
+		blocks := parseMarkdownBlocks("test.md", body)
+		if len(blocks) != 1 {
+			t.Fatalf("expected 1 root block (the heading), got %d", len(blocks))
+		}
+		if blocks[0].Content != "## Heading" {
+			t.Errorf("blocks[0].Content = %q, want '## Heading'", blocks[0].Content)
+		}
+		if len(blocks[0].Children) != 1 {
+			t.Fatalf("expected 1 child, got %d", len(blocks[0].Children))
+		}
+		if blocks[0].Children[0].UUID != "11111111-1111-1111-1111-111111111111" {
+			t.Errorf("child UUID = %q", blocks[0].Children[0].UUID)
+		}
+		if blocks[0].Children[0].Content != "Root content" {
+			t.Errorf("child Content = %q, want 'Root content'", blocks[0].Children[0].Content)
+		}
+	})
+
+	t.Run("multi-line tagged root", func(t *testing.T) {
+		body := "<!-- id: 11111111-1111-1111-1111-111111111111 -->\nLine one\nLine two\nLine three"
+		blocks := parseMarkdownBlocks("test.md", body)
+		if len(blocks) != 1 {
+			t.Fatalf("expected 1 block, got %d", len(blocks))
+		}
+		if blocks[0].UUID != "11111111-1111-1111-1111-111111111111" {
+			t.Errorf("UUID = %q", blocks[0].UUID)
+		}
+		want := "Line one\nLine two\nLine three"
+		if blocks[0].Content != want {
+			t.Errorf("Content = %q, want %q", blocks[0].Content, want)
+		}
+	})
 }
 
 func collectUUIDs(blocks []types.BlockEntity) []string {
